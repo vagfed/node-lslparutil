@@ -1,0 +1,324 @@
+<html>
+
+<head>
+  <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+  <meta content="utf-8" http-equiv="encoding">
+  <title>Vodafone simulation</title>
+
+  <style type="text/css">
+    body, html {
+      font-family: sans-serif;
+    }
+  </style>
+
+  <script src="./vis/dist/vis.js"></script>
+  <link href="./vis/dist/vis.css" rel="stylesheet" type="text/css" />
+
+  <script type="text/javascript">
+
+	var table_cols = 4;
+	var graph;
+	var failGraph;
+	var serverList;
+
+
+	function postJSON(url, callback, obj) {
+		var xhr = new XMLHttpRequest();
+
+		xhr.onreadystatechange = function () { 
+			if (xhr.readyState == 4 && xhr.status == 200) {
+        			var result = JSON.parse(xhr.responseText);
+				callback(null,result);
+    			}
+		}
+
+		xhr.open("POST", url, true);
+		xhr.setRequestHeader("Content-type", "application/json");
+		var data = JSON.stringify(obj);
+		xhr.send(data);
+	}
+
+	function getJSON(url, callback,obj) {
+		var xhr = new XMLHttpRequest();
+
+		xhr.onreadystatechange = function () {
+			if (xhr.readyState == 4 &&
+					xhr.status == 200) {
+				var result = JSON.parse(xhr.responseText);
+				callback(null,result,obj);
+			}
+		}
+
+		xhr.open("get", url, true);
+		xhr.send();
+	}
+
+
+	function fillSysHour(name) {
+		var table = document.getElementById("syshour");
+		var i;
+		var aaa;
+		var cell
+
+		for (i=0; i<table.rows.length; i++)
+			table.deleteRow(i);
+
+		table.insertRow(0);
+		for (i=0; i<24; i++) {
+			cell = table.rows[0].insertCell(i);
+			cell.style.textAlign = "center";
+			cell.innerHTML = i;
+			//table.rows[0].insertCell(i).innerHTML = i;
+		}
+
+		getJSON("http://localhost:3000/hmc?getmspoolhour="+name, function(err,result,aaa) {
+				table.insertRow(1);
+				result.forEach(function(e,n) {
+					cell = table.rows[1].insertCell(n);
+					cell.style.textAlign = "center";
+					if ("NAN".localeCompare(e.y) != 0)
+						cell.innerHTML = e.y.toFixed(2);
+					//table.rows[1].insertCell(n).innerHTML = e.y.toFixed(2);
+				});
+			},
+			aaa);
+	}
+
+
+
+
+	// Execute when document has been loaded
+	document.addEventListener('DOMContentLoaded', function() {
+
+		var names;
+		var aaa;
+
+		getJSON("http://localhost:3000/hmc?serverlist", function(err,result,aaa) {
+				var table = document.getElementById("systable");
+				var n_rows = Math.ceil(result.length / table_cols);
+				var i;
+
+				for (i=0; i<n_rows; i++)
+					table.insertRow(i);
+
+				serverList = result.sort();
+
+				serverList.forEach(function(e,n) {
+					var rowid = n % n_rows;
+					var colid = Math.trunc( n / n_rows);
+
+					var cell1 = table.rows[rowid].insertCell(colid);
+
+					cell1.innerHTML = "<input type=\"radio\" name=\"sysid\" value=\"" + e + "\">"+e;
+				});
+
+				var sysid = document.sysselection.sysid;
+	
+				for (i=0; i<sysid.length; i++) {
+					sysid[i].onclick = function() { 
+						updateGraphs(this.value);
+					};
+				}
+			},
+			aaa);
+
+	}, false);
+
+
+	// Upgrade graphs since MS "name" has been selected
+	function updateGraphs(name) {
+
+		var aaa;
+
+		var options = {
+		  	legend: true,
+			showCurrentTime : false,
+			// start: result[0].x,
+			// end: result[result.length-1].x,
+			drawPoints: {
+				size: 4,
+				style: 'circle'
+				}
+			};
+
+		var dataset = new vis.DataSet();
+  		var groups = new vis.DataSet();
+  		var container = document.getElementById("base");
+		var mainReqs = 0;
+
+		// Update hourly data
+		//fillSysHour(name);
+
+		// Update pool graph
+		mainReqs++;
+		getJSON("http://localhost:3000/hmc?getmspool="+name, function(err,result,aaa) {
+
+			groups.add( {
+				id: 0,
+				content: "Used CPU"
+				}
+	  		);
+
+			options.start = result[0].x;
+			options.end = result[result.length-1].x;
+
+			var i;
+			for (i=0; i<result.length; i++) {
+				dataset.add(
+					{
+						x: result[i].x,
+				   		y: result[i].y,
+						group: 0
+					}
+				   );
+			}
+			mainReqs--;
+			if (mainReqs == 0) {
+				if (graph !== undefined)
+					graph.destroy();
+				graph = new vis.Graph2d(container,dataset,groups,options);
+			}
+		},
+		aaa);
+			
+
+		mainReqs++;
+		getJSON("http://localhost:3000/hmc?getmsvp="+name, function(err,result,aaa) {
+			groups.add( {
+				id: 1,
+				content: "Active VP",
+			//	options: { yAxisOrientation: "right" }
+				}
+	  		);
+
+			options.start = result[0].x;
+			options.end = result[result.length-1].x;
+
+			var i;
+			for (i=0; i<result.length; i++) {
+				dataset.add(
+					{
+						x: result[i].x,
+				   		y: result[i].y,
+						group: 1
+					}
+				   );
+			}
+			mainReqs--;
+			if (mainReqs == 0) {
+				if (graph !== undefined)
+					graph.destroy();
+				graph = new vis.Graph2d(container,dataset,groups,options);
+			}
+		},
+		aaa);
+
+
+
+		// Update failed graphs
+		if (failGraph !== undefined)
+			failGraph.destroy();
+
+		var foptions = {
+		  	'legend': true,
+			'showCurrentTime' : false,
+			'start': undefined,
+			'end': undefined,
+			'drawPoints': {
+				'size': 4,
+				'style': 'circle'
+				}
+			};
+
+		var fdataset = new vis.DataSet();
+  		var fgroups = new vis.DataSet();
+  		var fcontainer = document.getElementById("fail");
+		var gr_id = 0;
+		var pending = serverList.length;
+
+
+
+		serverList.forEach(function(e,id) {
+			if (e.localeCompare(name)==0) {
+				pending--;
+				return;
+			}
+			var query = { 'base': name, 'failed': e };
+
+			postJSON("http://localhost:3000/hmc", function(err,result,aaa) {
+				if (result === undefined ||
+					! ( Object.prototype.toString.call(result) === '[object Array]') ) {
+					pending--;
+					if (pending==0)
+						failGraph = new vis.Graph2d(fcontainer,fdataset,fgroups,foptions);
+					return;
+				}
+
+				if (result.length == 0 ||
+					result[0].x === undefined ||
+					result[0].y === undefined) {
+					pending--;
+					if (pending==0)
+						failGraph = new vis.Graph2d(fcontainer,fdataset,fgroups,foptions);
+					return;
+				}
+
+
+
+				foptions.start = result[0].x;
+				foptions.end = result[result.length-1].x;
+
+				fgroups.add( {
+					'id': gr_id,
+					'content': "Failed system: " + e
+					}
+		  		);
+	
+				var i;
+				for (i=0; i<result.length; i++) {
+					fdataset.add(
+						{
+							'x': result[i].x,
+				   			'y': result[i].y,
+							'group': gr_id
+						}
+					   );
+				}
+
+				gr_id++;
+
+				pending--;
+				if (pending==0)
+					failGraph = new vis.Graph2d(fcontainer,fdataset,fgroups,foptions);
+			},
+			query);
+		});
+
+
+	}
+
+
+  </script>
+<body>
+<h2>Vodafone simulation</h2>
+<P>Simulation of what may happen if a single system halts and clusters move the workload on the secondary node. Only 2-node systems are considered based on the name suffix (aia and bia). If there is a 3 or more nodes cluster, they are not taken into account.
+<P>In case of system unavailability the load of its nodes (only clusters) is added on the other node if and only if it is higher than the load of other node: the idea is that all 2-nodes clusters are active-standby.
+<p>Select the system to evaluate:
+
+<FORM name="sysselection">
+	<TABLE id="systable">
+</TABLE>
+</FORM>
+
+<!--
+<P>Hourly distribution of usage of selected system:</P>
+<TABLE id="syshour" border="1">
+</TABLE>
+-->
+<P>Hystorical usage of selected system:</P>
+<div id="base"></div>
+<P>Load of the selected system when one of the other is down.
+<div id="fail"></div>
+
+</body>
+</html>
