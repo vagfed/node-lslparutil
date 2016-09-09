@@ -15,8 +15,8 @@ function PerfContainer(start, end, slots, step) {
 
 	var stats;			// StatManager: statistics of this data set
 	var sample = [];		// StatManager: collected data slots. Array of up to mySlots
-	var month = [];			// StatManager: statistics by month. 0-12, 0 = January
-	var week = [];			// StatManager: statistics by week. 0-7, 0 = Sunday
+	var month = [];			// StatManager: statistics by month. 0-11, 0 = January
+	var week = [];			// StatManager: statistics by week. 0-6, 0 = Sunday
 	var hour = [];			// StatManager: statistics by hour. 0-23
 
 	var monthEnabled = true;	// enable month var
@@ -86,7 +86,7 @@ function PerfContainer(start, end, slots, step) {
 	this.getWeek = 		function getWeek(n)		{ if ( weekEnabled && n>=0 && n<7 ) return week[n]; };
 
 	// Get the stats related to a specific hour. Result is a StatManager object
-	this.getHour = 		function getHour(n)		{ if ( hourEnabled && n>=0 && n<23 ) return hour[n]; };
+	this.getHour = 		function getHour(n)		{ if ( hourEnabled && n>=0 && n<24 ) return hour[n]; };
 
 	// Get the stats related to the entire data set
 	this.getStats = 	function getStats()		{ return stats; };
