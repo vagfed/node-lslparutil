@@ -113,8 +113,7 @@ function produceJSONfunc(obj, func) {
 }
 
 
-function produceJSONhour(obj) {
-
+function produceJSONweek(obj) {
 
 	if ( obj === undefined )
 		return {};
@@ -123,15 +122,43 @@ function produceJSONhour(obj) {
 	var i;
 	var v;
 
+	var base = new Date(2000,0,2,0,0,0);
+
+	for (i=0; i<7; i++) {
+		v = obj.getWeek(i);
+		if (v !== undefined)
+			result.push( { 'x' : new Date(base.getTime() + i*24*3600*1000), 'y' : v.getAvg() } );
+		else
+			result.push( { 'x' : new Date(base.getTime() + i*24*3600*1000), 'y' : "NAN" } );
+	}
+
+	//console.log(JSON.stringify(result));
+
+	return result;
+}
+
+
+
+function produceJSONhour(obj) {
+
+	if ( obj === undefined )
+		return {};
+
+	var result = [];
+	var i;
+	var v;
+
+	var base = new Date(2000,0,1,0,0,0);
+
 	for (i=0; i<24; i++) {
 		v = obj.getHour(i);
 		if (v !== undefined)
-			result.push( { 'x' : new Date(i*60000), 'y' : v.getAvg() } );
+			result.push( { 'x' : new Date(base.getTime() + i*3600000), 'y' : v.getAvg() } );
 		else
-			result.push( { 'x' : new Date(i*60000), 'y' : "NAN" } );
+			result.push( { 'x' : new Date(base.getTime() + i*3600000), 'y' : "NAN" } );
 	}
 
-	console.log(JSON.stringify(result));
+	//console.log(JSON.stringify(result));
 
 	return result;
 }
@@ -269,6 +296,15 @@ app.get('/hmc', function (req, res) {
 		return;
 	}
 
+	if (req.query.getmspoolweek != undefined) {
+		var ms = simulation.getMS();
+		var i;
+		for (i=0; i<ms.length; i++)
+			if (ms[i].name.localeCompare(req.query.getmspoolweek)==0)
+				res.json(produceJSONweek(ms[i].getSysPoolObject().usedcpu));
+		return;
+	}
+
 	if (req.query.getmspoolhour != undefined) {
 		var ms = simulation.getMS();
 		var i;
@@ -286,6 +322,26 @@ app.get('/hmc', function (req, res) {
 				res.json(produceJSON(ms[i].getSysPoolObject().vp));
 		return;
 	}
+
+	if (req.query.getpoolstats != undefined) {
+		var ms = simulation.getMS();
+		var i;
+		for (i=0; i<ms.length; i++)
+			if (ms[i].name.localeCompare(req.query.getpoolstats)==0) {
+				var result = {};
+				var obj = ms[i].getSysPoolObject().usedcpu.getStats();
+				result.min = obj.getMin();
+				result.max = obj.getMax();
+				result.avg = obj.getAvg();
+				result.l90 = obj.getLevel(0.90);
+				result.l95 = obj.getLevel(0.95);
+
+				res.json([result]);
+				console.log(JSON.stringify(result));
+			}
+		return;
+	}
+
 
 
 /*

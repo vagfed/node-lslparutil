@@ -20,6 +20,8 @@
 	var graph;
 	var failGraph;
 	var serverList;
+	var hourgraph;
+	var weekgraph;
 
 
 	function postJSON(url, callback, obj) {
@@ -54,32 +56,91 @@
 	}
 
 
-	function fillSysHour(name) {
-		var table = document.getElementById("syshour");
-		var i;
+	function fillSysWeekly(name) {
 		var aaa;
-		var cell
 
-		for (i=0; i<table.rows.length; i++)
-			table.deleteRow(i);
+		getJSON("http://localhost:3000/hmc?getmspoolweek="+name, function(err,result,aaa) {
 
-		table.insertRow(0);
-		for (i=0; i<24; i++) {
-			cell = table.rows[0].insertCell(i);
-			cell.style.textAlign = "center";
-			cell.innerHTML = i;
-			//table.rows[0].insertCell(i).innerHTML = i;
-		}
+				var options = {
+					style: 'bar',
+				  	legend: true,
+					showCurrentTime : false,
+					start: result[0].x,
+					end: result[result.length-1].x,
+					barChart: { width: 20},
+					//drawPoints: false
+					};
+
+				var dataset = new vis.DataSet();
+  				var groups = new vis.DataSet();
+		  		var container = document.getElementById("weekgraph");
+
+				groups.add( {
+					id: 0,
+					content: "CPU usage per week day"
+					}
+	  			);
+
+				var i;
+				for (i=0; i<result.length; i++) {
+					dataset.add(
+						{
+							x: result[i].x,
+				   			y: result[i].y,
+							group: 0,
+						}
+					   );
+				}
+
+				if (weekgraph !== undefined)
+					weekgraph.destroy();
+				weekgraph = new vis.Graph2d(container,dataset,groups,options);
+
+			},
+			aaa);
+	}
+
+
+	function fillSysHour(name) {
+		var aaa;
 
 		getJSON("http://localhost:3000/hmc?getmspoolhour="+name, function(err,result,aaa) {
-				table.insertRow(1);
-				result.forEach(function(e,n) {
-					cell = table.rows[1].insertCell(n);
-					cell.style.textAlign = "center";
-					if ("NAN".localeCompare(e.y) != 0)
-						cell.innerHTML = e.y.toFixed(2);
-					//table.rows[1].insertCell(n).innerHTML = e.y.toFixed(2);
-				});
+
+				var optionsH = {
+					style: 'bar',
+				  	legend: true,
+					showCurrentTime : false,
+					start: result[0].x,
+					end: result[result.length-1].x,
+					barChart: { width: 20},
+					//drawPoints: false,
+				};
+
+				var dataset = new vis.DataSet();
+  				var groups = new vis.DataSet();
+		  		var container = document.getElementById("hourgraph");
+
+				groups.add( {
+					id: 0,
+					content: "CPU usage per hour"
+					}
+	  			);
+
+				var i;
+				for (i=0; i<result.length; i++) {
+					dataset.add(
+						{
+							x: result[i].x,
+				   			y: result[i].y,
+							group: 0
+						}
+					   );
+				}
+
+				if (hourgraph !== undefined)
+					hourgraph.destroy();
+				hourgraph = new vis.Graph2d(container,dataset,groups,optionsH);
+
 			},
 			aaa);
 	}
@@ -125,6 +186,25 @@
 	}, false);
 
 
+	// Upgrade statists
+	function updateStats(name) {
+		var aaa;
+
+		getJSON("http://localhost:3000/hmc?getpoolstats="+name, function(err,result,aaa) {
+			var c =  document.getElementById("stats");
+			c.innerHTML = "<B>" + 
+					"Min=" + result[0].min.toFixed(2) + " " +
+					"Max=" + result[0].max.toFixed(2) + " " +
+					"Avg=" + result[0].avg.toFixed(2) + " " +
+					"90p=" + result[0].l90.toFixed(2) + " " +
+					"95p=" + result[0].l95.toFixed(2) + " " +
+				      "</B>";
+		},
+		aaa);
+	}
+
+
+
 	// Upgrade graphs since MS "name" has been selected
 	function updateGraphs(name) {
 
@@ -147,7 +227,10 @@
 		var mainReqs = 0;
 
 		// Update hourly data
-		//fillSysHour(name);
+		fillSysHour(name);
+
+		// Update weekly data
+		fillSysWeekly(name);
 
 		// Update pool graph
 		mainReqs++;
@@ -163,6 +246,7 @@
 			options.end = result[result.length-1].x;
 
 			var i;
+			var max = 0;
 			for (i=0; i<result.length; i++) {
 				dataset.add(
 					{
@@ -171,6 +255,8 @@
 						group: 0
 					}
 				   );
+				if (result[i].y > max)
+					max = result[i].y;
 			}
 			mainReqs--;
 			if (mainReqs == 0) {
@@ -178,6 +264,9 @@
 					graph.destroy();
 				graph = new vis.Graph2d(container,dataset,groups,options);
 			}
+
+			var c =  document.getElementById("msmax");
+			c.innerHTML = "<B>" + max.toFixed(2) + "</B>";
 		},
 		aaa);
 			
@@ -214,6 +303,9 @@
 		aaa);
 
 
+		// update statistsics
+		updateStats(name);
+
 
 		// Update failed graphs
 		if (failGraph !== undefined)
@@ -235,6 +327,7 @@
   		var fcontainer = document.getElementById("fail");
 		var gr_id = 0;
 		var pending = serverList.length;
+		var max = 0;
 
 
 
@@ -249,8 +342,11 @@
 				if (result === undefined ||
 					! ( Object.prototype.toString.call(result) === '[object Array]') ) {
 					pending--;
-					if (pending==0)
+					if (pending==0) {
 						failGraph = new vis.Graph2d(fcontainer,fdataset,fgroups,foptions);
+						var c =  document.getElementById("fmax");
+						c.innerHTML = "<B>" + max.toFixed(2) + "</B>";
+					}
 					return;
 				}
 
@@ -258,8 +354,11 @@
 					result[0].x === undefined ||
 					result[0].y === undefined) {
 					pending--;
-					if (pending==0)
+					if (pending==0) {
 						failGraph = new vis.Graph2d(fcontainer,fdataset,fgroups,foptions);
+						var c =  document.getElementById("fmax");
+						c.innerHTML = "<B>" + max.toFixed(2) + "</B>";
+					}
 					return;
 				}
 
@@ -283,13 +382,20 @@
 							'group': gr_id
 						}
 					   );
+
+					if (result[i].y > max)
+						max = result[i].y;
+
 				}
 
 				gr_id++;
 
 				pending--;
-				if (pending==0)
+				if (pending==0) {
 					failGraph = new vis.Graph2d(fcontainer,fdataset,fgroups,foptions);
+					var c =  document.getElementById("fmax");
+					c.innerHTML = "<B>" + max.toFixed(2) + "</B>";
+				}
 			},
 			query);
 		});
@@ -310,14 +416,15 @@
 </TABLE>
 </FORM>
 
-<!--
-<P>Hourly distribution of usage of selected system:</P>
-<TABLE id="syshour" border="1">
-</TABLE>
--->
-<P>Hystorical usage of selected system:</P>
+<P>Hourly & weekly distribution of usage of selected system:</P>
+<div style="width: 100%; overflow:hidden;">
+	<div style="width: 50%; float: left;" id="hourgraph"></div>
+	<div style="margin-left: 50%;" id="weekgraph"></div>
+</div>
+<P>Hystorical usage of selected system: (Max is: <span id="msmax"></span>) </P>
+<P>Statistics: <span id="stats"></span></P>
 <div id="base"></div>
-<P>Load of the selected system when one of the other is down.
+<P>Load of the selected system when one of the other is down: (Max is: <span id="fmax"></span>) </P>
 <div id="fail"></div>
 
 </body>
