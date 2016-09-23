@@ -2,7 +2,7 @@
 
 function StatManager(thisStep) {
 	if (! (this instanceof StatManager) ) {
-		return new StatManager(step);
+		return new StatManager(thisStep);
 	}
 	var step 		= thisStep;		// step for distribution calculation
 	var counter 		= [];			// count entried for each step
@@ -21,8 +21,8 @@ function StatManager(thisStep) {
 		numValues++;
 		sumValues += n;
 	
-		blockId = Math.trunc(n / step);
-		if (counter[blockId] == undefined)
+		var blockId = Math.trunc(n / step);
+		if (counter[blockId] === undefined)
 			counter[blockId]=1;
 		else
 			counter[blockId]++;		
@@ -66,6 +66,11 @@ function StatManager(thisStep) {
 			}
 
 		console.log("StatManager This should never happen....");
+		console.log("-> step="+step);
+		console.log("-> level="+level);
+		console.log("-> numValues="+numValues);
+		console.log("-> num="+num);
+		console.log(JSON.stringify(counter));
 	}
 }
 
